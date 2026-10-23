@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV. FAMILY EGG - Sistem Manajemen UMKM (Multi-Device)</title>
+    <!-- SheetJS CDN for Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- jsPDF & AutoTable CDN for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- Chart.js CDN for Graphics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDK (Modular v10) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // Konfigurasi Firebase CV. FAMILY EGG
+        const firebaseConfig = {
+            apiKey: "AIzaSyCObU37tDGJwL_ehwdkZjSpsGAdhxO9uYU",
+            authDomain: "cv-family-egg.firebaseapp.com",
+            databaseURL: "https://cv-family-egg-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "cv-family-egg",
+            storageBucket: "cv-family-egg.firebasestorage.app",
+            messagingSenderId: "217512626741",
+            appId: "1:217512626741:web:3e19eee55807228230bf7c",
+            measurementId: "G-9WWGVQLKKC"
+        };
+
+        // Inisialisasi Firebase & Database Realtime
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // State Global Aplikasi
+        window.dataBarang = [];
+        window.dataTransaksi = [];
+        window.dataPembayaranBon = [];
+        window.dataPembayaranHutang = [];
+
+        // Sinkronisasi Real-time dari Firebase
+        onValue(ref(db, 'cv_family_egg/'), (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                window.dataBarang = data.barang ? Object.keys(data.barang).map(key => ({ id: key, ...data.barang[key] })) : [];
+                window.dataTransaksi = data.transaksi ? Object.keys(data.transaksi).map(key => ({ id: key, ...data.transaksi[key] })) : [];
+                window.dataPembayaranBon = data.pembayaranBon ? Object.keys(data.pembayaranBon).map(key => ({ id: key, ...data.pembayaranBon[key] })) : [];
+                window.dataPembayaranHutang = data.pembayaranHutang ? Object.keys(data.pembayaranHutang).map(key => ({ id: key, ...data.pembayaranHutang[key] })) : [];
+            } else {
+                window.dataBarang = [];
+                window.dataTransaksi = [];
+                window.dataPembayaranBon = [];
+                window.dataPembayaranHutang = [];
+            }
+            if (typeof window.render === 'function') {
+                window.render();
+            }
+        });
+
+        // Fungsi Simpan ke Database Cloud
+        window.simpanKeFirebase = function() {
+            const barangObj = {};
+            window.dataBarang.forEach(b => { barangObj[b.id] = { nama: b.nama, supplier: b.supplier, modal: b.modal, jual: b.jual, stok: b.stok }; });
+
+            const transaksiObj = {};
+            window.dataTransaksi.forEach(t => { transaksiObj[t.id] = { barangId: t.barangId || null, tgl: t.tgl, waktu: t.waktu, tipe: t.tipe, detail: t.detail, pelanggan: t.pelanggan, qty: t.qty, hargaSatuan: t.hargaSatuan, total: t.total, metode: t.metode, statusBon: t.statusBon, labaBersih: t.labaBersih, jenis: t.jenis }; });
+
+            const bonObj = {};
+            window.dataPembayaranBon.forEach(p => { bonObj[p.id] = { pelanggan: p.pelanggan, tgl: p.tgl, waktu: p.waktu, nominal: p.nominal, metode: p.metode }; });
+
+            const hutangObj = {};
+            window.dataPembayaranHutang.forEach(p => { hutangObj[p.id] = { supplier: p.supplier, tgl: p.tgl, waktu: p.waktu, nominal: p.nominal, metode: p.metode }; });
+
+            set(ref(db, 'cv_family_egg/'), {
+                barang: barangObj,
+                transaksi: transaksiObj,
+                pembayaranBon: bonObj,
+                pembayaranHutang: hutangObj
+            });
+        };
+    </script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f9; padding: 20px; color: #333; }
+        h1, h2, h3 { color: #2c3e50; margin-bottom: 12px; }
+        .header { background: #e67e22; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .summary-box { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .summary-item { flex: 1; min-width: 180px; background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .summary-item.income { border-top: 5px solid #2ecc71; }
+        .summary-item.expense { border-top: 5px solid #e74c3c; }
+        .summary-item.profit { border-top: 5px solid #3498db; }
+        .summary-item.loss { border-top: 5px solid #e67e22; }
+        .summary-item.bon { border-top: 5px solid #f1c40f; }
+        .summary-item.hutang { border-top: 5px solid #9b59b6; }
+        form { display: flex; flex-direction: column; gap: 10px; }
+        input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        button { background-color: #e67e22; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #d35400; }
+        button.btn-excel { background-color: #27ae60; margin-top: 5px; }
+        button.btn-pdf { background-color: #c0392b; margin-top: 5px; }
+        .btn-delete { background-color: #e74c3c; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer; }
+        .btn-bayar { background-color: #27ae60; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer; margin-right: 5px; }
+        .btn-bayar-supplier { background-color: #8e44ad; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer; margin-right: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+        th { background-color: #f8f9fa; }
+        .filter-section { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; }
+        .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filter-input-group { display: flex; align-items: center; gap: 5px; }
+        .search-box-bon, .search-box-hutang { width: 100%; margin-bottom: 10px; padding: 10px; border-radius: 4px; font-size: 14px; }
+        .search-box-bon { border: 2px solid #f1c40f; }
+        .search-box-hutang { border: 2px solid #9b59b6; }
+        .text-danger { color: #e74c3c; font-weight: bold; }
+        .text-success { color: #2ecc71; font-weight: bold; }
+        .badge-method { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge-cash { background-color: #e8f8f5; color: #117a65; border: 1px solid #a3e4d7; }
+        .badge-transfer { background-color: #ebf5fb; color: #2980b9; border: 1px solid #a9cce3; }
+        .badge-bon { background-color: #fef9e7; color: #b7950b; border: 1px solid #f9e79f; }
+        .badge-hutang { background-color: #f5eeed; color: #8e44ad; border: 1px solid #d7bde2; }
+        .badge-status-bon { background-color: #fadbd8; color: #78281f; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .badge-status-lunas { background-color: #d4efdf; color: #145a32; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .badge-supplier { display: inline-block; background-color: #eef2f5; color: #34495e; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; border: 1px solid #ced6e0; }
+        .status-sync { display: inline-block; padding: 4px 10px; background-color: #d4efdf; color: #145a32; border-radius: 20px; font-size: 12px; font-weight: bold; margin-top: 8px; }
+        .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>CV. FAMILY EGG</h1>
+        <p>Sistem Manajemen Stok Per Supplier, Piutang Pelanggan, Hutang Supplier & Laporan Keuangan</p>
+        <span class="status-sync">🟢 Sinkronisasi Cloud Multi-Device Aktif (Real-time)</span>
+    </div>
+
+    <!-- RINGKASAN KEUANGAN -->
+    <div class="summary-box">
+        <div class="summary-item income">
+            <h3>Total Kas Masuk (<span class="txt-periode">Semua</span>)</h3>
+            <p id="totalPendapatan">Rp 0</p>
+        </div>
+        <div class="summary-item expense">
+            <h3>Total Pengeluaran Kas (<span class="txt-periode">Semua</span>)</h3>
+            <p id="totalPengeluaran">Rp 0</p>
+        </div>
+        <div class="summary-item bon">
+            <h3>Piutang Pelanggan (Bon)</h3>
+            <p id="totalBonBelumLunas">Rp 0</p>
+        </div>
+        <div class="summary-item hutang">
+            <h3>Hutang ke Supplier</h3>
+            <p id="totalHutangBelumLunas">Rp 0</p>
+        </div>
+        <div class="summary-item profit" id="boxStatusLaba">
+            <h3 id="labelStatusLaba">Laba / Rugi Bersih (<span class="txt-periode">Semua</span>)</h3>
+            <p id="totalLaba">Rp 0</p>
+        </div>
+    </div>
+
+    <!-- GRAFIK PENJUALAN -->
+    <div class="card" style="margin-bottom: 20px;">
+        <h2>Grafik Penjualan & Laba Bersih Harian (Periode Terpilih)</h2>
+        <div class="chart-container">
+            <canvas id="grafikPenjualan"></canvas>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- FORM MASTER BARANG -->
+        <div class="card">
+            <h2>1. Master Stok Barang Per Supplier</h2>
+            <form id="formBarang">
+                <input type="text" id="namaBarang" placeholder="Nama/Jenis Telur (misal: Telur Ayam Ras)" required>
+                <input type="text" id="namaSupplierBarang" placeholder="Nama Supplier / Asal Barang" required>
+                <input type="number" id="hargaModal" placeholder="Harga Modal Dasar per kg/ikat (Rp)" required>
+                <input type="number" id="hargaJual" placeholder="Harga Jual Standar per kg/ikat (Rp)" required>
+                <button type="submit">Simpan Master Barang</button>
+            </form>
+        </div>
+
+        <!-- FORM TRANSAKSI -->
+        <div class="card">
+            <h2>2. Catat Transaksi (Masuk/Keluar)</h2>
+            <form id="formTransaksi">
+                <select id="tipeTransaksi" required>
+                    <option value="keluar">Barang Keluar / Penjualan (Stok Berkurang)</option>
+                    <option value="masuk">Barang Masuk / Pembelian (Stok Tambah)</option>
+                </select>
+                <select id="pilihBarang" required><option value="">Pilih Barang & Supplier...</option></select>
+                <input type="number" id="jumlah" placeholder="Jumlah (Qty)" required>
+                <input type="text" id="namaPelanggan" placeholder="Nama Pelanggan / Supplier (Opsional)" required>
+                
+                <select id="metodePembayaran" required>
+                    <option value="Cash">Cash (Tunai)</option>
+                    <option value="Transfer">Transfer Bank / QRIS</option>
+                    <option value="Bon">Bon / Hutang (Belum Bayar)</option>
+                </select>
+
+                <div id="wrapperHargaKhusus">
+                    <label style="font-size: 12px; color: #666;">Harga Jual Khusus Pelanggan:</label>
+                    <input type="number" id="hargaKhusus" placeholder="Harga Jual Khusus per Satuan (Rp)">
+                </div>
+                
+                <button type="submit">Catat Transaksi</button>
+            </form>
+        </div>
+
+        <!-- FORM PENGELUARAN -->
+        <div class="card">
+            <h2>3. Pengeluaran / Kerugian Operasional</h2>
+            <form id="formPengeluaran">
+                <input type="text" id="ketPengeluaran" placeholder="Keterangan (Gaji, Bensin, Telur Pecah)" required>
+                <input type="number" id="nominalPengeluaran" placeholder="Nominal Kerugian / Pengeluaran (Rp)" required>
+                <select id="metodePengeluaran" required>
+                    <option value="Cash">Cash (Tunai)</option>
+                    <option value="Transfer">Transfer Bank / QRIS</option>
+                </select>
+                <button type="submit">Tambah Pengeluaran</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABEL STOK -->
+    <div class="card" style="margin-bottom: 20px;">
+        <h2>Daftar Stok & Master Harga</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Jenis Barang</th>
+                    <th>Supplier / Asal</th>
+                    <th>Harga Modal</th>
+                    <th>Harga Jual Standar</th>
+                    <th>Stok (per Batch)</th>
+                    <th>Total Stok (Kategori)</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="tabelStok"></tbody>
+        </table>
+    </div>
+
+    <!-- TABEL BON -->
+    <div class="card" style="margin-bottom: 20px;">
+        <h2>Daftar Akumulasi Bon / Piutang Per Pelanggan</h2>
+        <input type="text" id="cariPelangganBon" class="search-box-bon" placeholder="🔍 Cari Nama Pelanggan..." oninput="render()">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nama Pelanggan</th>
+                    <th>Total Bon (Rp)</th>
+                    <th>Total Telah Dibayar (Rp)</th>
+                    <th>Sisa Bon (Rp)</th>
+                    <th>Status</th>
+                    <th>Aksi Pembayaran / Cicilan</th>
+                </tr>
+            </thead>
+            <tbody id="tabelBon"></tbody>
+        </table>
+    </div>
+
+    <!-- TABEL HUTANG -->
+    <div class="card" style="margin-bottom: 20px;">
+        <h2>Daftar Akumulasi Hutang Per Supplier</h2>
+        <input type="text" id="cariSupplierHutang" class="search-box-hutang" placeholder="🔍 Cari Nama Supplier..." oninput="render()">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nama Supplier</th>
+                    <th>Total Hutang Pembelian (Rp)</th>
+                    <th>Total Telah Dibayar (Rp)</th>
+                    <th>Sisa Hutang (Rp)</th>
+                    <th>Status</th>
+                    <th>Aksi Pembayaran / Cicilan</th>
+                </tr>
+            </thead>
+            <tbody id="tabelHutang"></tbody>
+        </table>
+    </div>
+
+    <!-- LAPORAN & EKSPOR -->
+    <div class="card">
+        <h2>Riwayat Transaksi & Laporan Keuangan</h2>
+        <div class="filter-section">
+            <div class="filter-row">
+                <label><b>Pilih Mode Filter Laporan:</b></label>
+                <select id="modeFilter" onchange="gantiModeFilter()">
+                    <option value="semua">Semua Transaksi</option>
+                    <option value="rentang">Rentang Tanggal Custom</option>
+                    <option value="mingguan">Mingguan (7 Hari Terakhir)</option>
+                    <option value="bulanan">Bulanan</option>
+                    <option value="tahunan">Tahunan</option>
+                </select>
+            </div>
+            <div class="filter-row" id="containerInputs"></div>
+            <div class="filter-row">
+                <button type="button" onclick="render()">Tampilkan Laporan</button>
+                <button type="button" class="btn-excel" onclick="eksporExcel()">📊 Unduh Laporan Excel</button>
+                <button type="button" class="btn-pdf" onclick="eksporPDF()">📄 Unduh Laporan PDF</button>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Tanggal & Waktu</th>
+                    <th>Tipe Transaksi</th>
+                    <th>Detail / Pelanggan / Supplier</th>
+                    <th>Metode</th>
+                    <th>Qty</th>
+                    <th>Harga Satuan (Rp)</th>
+                    <th>Total (Rp)</th>
+                    <th>Laba/Rugi (Rp)</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="tabelRiwayat"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let grafikInstance = null;
+
+        document.getElementById('tipeTransaksi').addEventListener('change', function() {
+            document.getElementById('wrapperHargaKhusus').style.display = this.value === 'keluar' ? 'block' : 'none';
+        });
+
+        document.getElementById('pilihBarang').addEventListener('change', function() {
+            const barangId = this.value;
+            const barang = window.dataBarang.find(b => b.id === barangId);
+            if (barang) {
+                document.getElementById('hargaKhusus').value = barang.jual;
+            }
+        });
+
+        function gantiModeFilter() {
+            const mode = document.getElementById('modeFilter').value;
+            const container = document.getElementById('containerInputs');
+            container.innerHTML = '';
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+
+            if (mode === 'rentang') {
+                container.innerHTML = `<div class="filter-input-group"><label>Dari:</label><input type="date" id="tglMulai" value="${yyyy}-${mm}-01"></div><div class="filter-input-group"><label>Sampai:</label><input type="date" id="tglSelesai" value="${yyyy}-${mm}-${dd}"></div>`;
+            } else if (mode === 'bulanan') {
+                container.innerHTML = `<div class="filter-input-group"><label>Bulan:</label><input type="month" id="filterBulan" value="${yyyy}-${mm}"></div>`;
+            } else if (mode === 'tahunan') {
+                container.innerHTML = `<div class="filter-input-group"><label>Tahun:</label><input type="number" id="filterTahun" value="${yyyy}" min="2020" max="2099"></div>`;
+            }
+            render();
+        }
+
+        document.getElementById('formBarang').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const nama = document.getElementById('namaBarang').value.trim();
+            const supplier = document.getElementById('namaSupplierBarang').value.trim();
+            const modal = parseFloat(document.getElementById('hargaModal').value);
+            const jual = parseFloat(document.getElementById('hargaJual').value);
+
+            const newId = 'b_' + Date.now();
+            window.dataBarang.push({ id: newId, nama, supplier: supplier || 'Umum', modal, jual, stok: 0 });
+            window.simpanKeFirebase();
+            this.reset();
+        });
+
+        document.getElementById('formTransaksi').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const tipe = document.getElementById('tipeTransaksi').value;
+            const barangId = document.getElementById('pilihBarang').value;
+            const qty = parseFloat(document.getElementById('jumlah').value);
+            let entitas = (document.getElementById('namaPelanggan').value || '').trim();
+            const metode = document.getElementById('metodePembayaran').value;
+
+            const barang = window.dataBarang.find(b => b.id === barangId);
+            if (!barang) return;
+
+            if (tipe === 'masuk' && !entitas) entitas = barang.supplier;
+            else if (!entitas) entitas = '-';
+
+            const skrg = new Date();
+            const tglFormatted = skrg.toISOString().split('T')[0];
+            const jamFormatted = skrg.toLocaleTimeString('id-ID');
+            const newId = 't_' + Date.now();
+
+            if (tipe === 'masuk') {
+                barang.stok += qty;
+                window.dataTransaksi.push({
+                    id: newId, barangId: barang.id, tgl: tglFormatted, waktu: jamFormatted,
+                    tipe: 'Barang Masuk', detail: `${barang.nama} [Supplier: ${entitas}]`,
+                    pelanggan: entitas, qty: qty, hargaSatuan: barang.modal, total: qty * barang.modal,
+                    metode: metode === 'Bon' ? 'Hutang Supplier' : metode, statusBon: 'Non-Bon', labaBersih: 0, jenis: 'pengeluaran_stok'
+                });
+            } else {
+                if (barang.stok < qty) {
+                    alert(`Stok ${barang.nama} tidak mencukupi! Sisa stok: ${barang.stok}`);
+                    return;
+                }
+                const hargaKhususInput = document.getElementById('hargaKhusus').value;
+                const hargaAplikasi = hargaKhususInput ? parseFloat(hargaKhususInput) : barang.jual;
+                const profitOrLoss = (hargaAplikasi - barang.modal) * qty;
+
+                barang.stok -= qty;
+                window.dataTransaksi.push({
+                    id: newId, barangId: barang.id, tgl: tglFormatted, waktu: jamFormatted,
+                    tipe: 'Penjualan', detail: `${barang.nama} (Supplier: ${barang.supplier}) - Pelanggan: ${entitas}`,
+                    pelanggan: entitas, qty: qty, hargaSatuan: hargaAplikasi, total: qty * hargaAplikasi,
+                    metode: metode, statusBon: metode === 'Bon' ? 'Bon' : 'Non-Bon', labaBersih: profitOrLoss, jenis: 'pendapatan'
+                });
+            }
+            window.simpanKeFirebase();
+            this.reset();
+        });
+
+        document.getElementById('formPengeluaran').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const ket = document.getElementById('ketPengeluaran').value;
+            const nominal = parseFloat(document.getElementById('nominalPengeluaran').value);
+            const metode = document.getElementById('metodePengeluaran').value;
+            const skrg = new Date();
+
+            window.dataTransaksi.push({
+                id: 't_' + Date.now(), barangId: null, tgl: skrg.toISOString().split('T')[0], waktu: skrg.toLocaleTimeString('id-ID'),
+                tipe: 'Biaya / Kerugian Operasional', detail: ket, pelanggan: '-', qty: '-', hargaSatuan: nominal,
+                total: nominal, metode: metode, statusBon: 'Non-Bon', labaBersih: -nominal, jenis: 'pengeluaran_ops'
+            });
+            window.simpanKeFirebase();
+            this.reset();
+        });
+
+        window.bayarBonFleksibel = function(namaPelangganKey, sisaBon) {
+            const inputNominal = prompt(`Pembayaran Bon "${namaPelangganKey}"\nSisa: Rp ${sisaBon.toLocaleString('id-ID')}\nMasukkan nominal (Rp):`, sisaBon);
+            if (inputNominal === null) return;
+            const nominal = parseFloat(inputNominal);
+            if (isNaN(nominal) || nominal <= 0 || nominal > sisaBon) return alert('Nominal tidak valid!');
+
+            const inputMetode = prompt(`Pilih Metode:\n1. Cash (Tunai)\n2. Transfer Bank`, "1");
+            if (inputMetode !== "1" && inputMetode !== "2") return;
+            const metodeTipe = inputMetode === "1" ? 'Cash' : 'Transfer';
+            const skrg = new Date();
+
+            window.dataPembayaranBon.push({ id: 'pb_' + Date.now(), pelanggan: namaPelangganKey, tgl: skrg.toISOString().split('T')[0], waktu: skrg.toLocaleTimeString('id-ID'), nominal, metode: metodeTipe });
+            window.dataTransaksi.push({ id: 't_' + Date.now(), barangId: null, tgl: skrg.toISOString().split('T')[0], waktu: skrg.toLocaleTimeString('id-ID'), tipe: 'Pembayaran Bon', detail: `Cicilan Bon (${namaPelangganKey})`, pelanggan: namaPelangganKey, qty: '-', hargaSatuan: nominal, total: nominal, metode: `${metodeTipe} (Bayar Bon)`, statusBon: 'Non-Bon', labaBersih: 0, jenis: 'pendapatan' });
+            window.simpanKeFirebase();
+        };
+
+        window.bayarHutangSupplierFleksibel = function(namaSupplierKey, sisaHutang) {
+            const inputNominal = prompt(`Pembayaran Hutang Supplier "${namaSupplierKey}"\nSisa: Rp ${sisaHutang.toLocaleString('id-ID')}\nMasukkan nominal (Rp):`, sisaHutang);
+            if (inputNominal === null) return;
+            const nominal = parseFloat(inputNominal);
+            if (isNaN(nominal) || nominal <= 0 || nominal > sisaHutang) return alert('Nominal tidak valid!');
+
+            const inputMetode = prompt(`Pilih Metode:\n1. Cash (Tunai)\n2. Transfer Bank`, "1");
+            if (inputMetode !== "1" && inputMetode !== "2") return;
+            const metodeTipe = inputMetode === "1" ? 'Cash' : 'Transfer';
+            const skrg = new Date();
+
+            window.dataPembayaranHutang.push({ id: 'ph_' + Date.now(), supplier: namaSupplierKey, tgl: skrg.toISOString().split('T')[0], waktu: skrg.toLocaleTimeString('id-ID'), nominal, metode: metodeTipe });
+            window.dataTransaksi.push({ id: 't_' + Date.now(), barangId: null, tgl: skrg.toISOString().split('T')[0], waktu: skrg.toLocaleTimeString('id-ID'), tipe: 'Pembayaran Hutang Supplier', detail: `Pembayaran Hutang Supplier (${namaSupplierKey})`, pelanggan: namaSupplierKey, qty: '-', hargaSatuan: nominal, total: nominal, metode: `${metodeTipe} (Bayar Hutang)`, statusBon: 'Non-Bon', labaBersih: 0, jenis: 'pengeluaran_ops' });
+            window.simpanKeFirebase();
+        };
+
+        window.hapusBarang = function(id) {
+            if (confirm('Yakin ingin menghapus master barang ini?')) {
+                window.dataBarang = window.dataBarang.filter(b => b.id !== id);
+                window.simpanKeFirebase();
+            }
+        };
+
+        window.hapusTransaksi = function(id) {
+            const index = window.dataTransaksi.findIndex(t => t.id === id);
+            if (index === -1) return;
+            const t = window.dataTransaksi[index];
+            if (confirm(`Hapus transaksi "${t.tipe} - ${t.detail}"?`)) {
+                if (t.barangId) {
+                    const barang = window.dataBarang.find(b => b.id === t.barangId);
+                    if (barang) {
+                        if (t.jenis === 'pengeluaran_stok') barang.stok = Math.max(0, barang.stok - t.qty);
+                        else if (t.jenis === 'pendapatan') barang.stok += t.qty;
+                    }
+                }
+                window.dataTransaksi.splice(index, 1);
+                window.simpanKeFirebase();
+            }
+        };
+
+        function getFilteredTransaksi() {
+            const mode = document.getElementById('modeFilter').value;
+            let filtered = [...window.dataTransaksi];
+
+            if (mode === 'rentang') {
+                const m = document.getElementById('tglMulai')?.value;
+                const s = document.getElementById('tglSelesai')?.value;
+                if (m && s) filtered = filtered.filter(t => t.tgl >= m && t.tgl <= s);
+            } else if (mode === 'mingguan') {
+                const today = new Date();
+                const past = new Date(); past.setDate(today.getDate() - 7);
+                filtered = filtered.filter(t => t.tgl >= past.toISOString().split('T')[0] && t.tgl <= today.toISOString().split('T')[0]);
+            } else if (mode === 'bulanan') {
+                const b = document.getElementById('filterBulan')?.value;
+                if (b) filtered = filtered.filter(t => t.tgl.startsWith(b));
+            } else if (mode === 'tahunan') {
+                const th = document.getElementById('filterTahun')?.value;
+                if (th) filtered = filtered.filter(t => t.tgl.startsWith(th));
+            }
+            return filtered.sort((a,b) => new Date(a.tgl) - new Date(b.tgl));
+        }
+
+        function getLabelPeriode() {
+            const mode = document.getElementById('modeFilter').value;
+            if (mode === 'rentang') return `${document.getElementById('tglMulai')?.value} s/d ${document.getElementById('tglSelesai')?.value}`;
+            if (mode === 'mingguan') return `7 Hari Terakhir`;
+            if (mode === 'bulanan') return `Bulan ${document.getElementById('filterBulan')?.value}`;
+            if (mode === 'tahunan') return `Tahun ${document.getElementById('filterTahun')?.value}`;
+            return `Semua Periode`;
+        }
+
+        function renderGrafik(transaksiFiltered) {
+            const ctx = document.getElementById('grafikPenjualan').getContext('2d');
+            let grafikData = {};
+            transaksiFiltered.forEach(t => {
+                if (!grafikData[t.tgl]) grafikData[t.tgl] = { omset: 0, laba: 0 };
+                if (t.jenis === 'pendapatan' && t.metode !== 'Bon' && t.tipe === 'Penjualan') grafikData[t.tgl].omset += t.total;
+                if (typeof t.labaBersih === 'number') grafikData[t.tgl].laba += t.labaBersih;
+            });
+            const labels = Object.keys(grafikData);
+            if (grafikInstance) grafikInstance.destroy();
+
+            grafikInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Omset Penjualan (Rp)', data: labels.map(l => grafikData[l].omset), borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', fill: true, tension: 0.3 },
+                        { label: 'Laba Bersih (Rp)', data: labels.map(l => grafikData[l].laba), borderColor: '#2ecc71', backgroundColor: 'rgba(46, 204, 113, 0.1)', fill: true, tension: 0.3 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        window.render = function() {
+            const barangTersedia = window.dataBarang.filter(b => b.stok > 0 || !window.dataTransaksi.some(t => t.barangId === b.id));
+            const selectBarang = document.getElementById('pilihBarang');
+            selectBarang.innerHTML = '<option value="">Pilih Barang & Supplier...</option>';
+            
+            let barangGrouped = {};
+            barangTersedia.forEach(b => {
+                selectBarang.innerHTML += `<option value="${b.id}">${b.nama} | Supplier: ${b.supplier} | Modal: Rp ${b.modal.toLocaleString('id-ID')}</option>`;
+                const key = b.nama.trim();
+                if (!barangGrouped[key]) barangGrouped[key] = { items: [], totalStokCategory: 0 };
+                barangGrouped[key].items.push(b);
+                barangGrouped[key].totalStokCategory += b.stok;
+            });
+
+            const tabelStok = document.getElementById('tabelStok');
+            tabelStok.innerHTML = '';
+            Object.keys(barangGrouped).forEach(namaJenis => {
+                const group = barangGrouped[namaJenis];
+                group.items.forEach((item, index) => {
+                    let cellNama = index === 0 ? `<td rowspan="${group.items.length}" style="vertical-align: middle;"><b>${namaJenis}</b></td>` : '';
+                    let cellStok = index === 0 ? `<td rowspan="${group.items.length}" style="vertical-align: middle; text-align: center;"><b>${group.totalStokCategory}</b></td>` : '';
+                    tabelStok.innerHTML += `<tr>${cellNama}<td><span class="badge-supplier">${item.supplier}</span></td><td>Rp ${item.modal.toLocaleString('id-ID')}</td><td>Rp ${item.jual.toLocaleString('id-ID')}</td><td><b>${item.stok}</b></td>${cellStok}<td><button class="btn-delete" onclick="hapusBarang('${item.id}')">Hapus</button></td></tr>`;
+                });
+            });
+
+            // Akumulasi Bon & Hutang
+            let petaBon = {}, petaHutang = {};
+            window.dataTransaksi.forEach(t => {
+                if (t.jenis === 'pendapatan' && t.metode === 'Bon' && t.pelanggan && t.pelanggan !== '-') {
+                    petaBon[t.pelanggan] = (petaBon[t.pelanggan] || 0) + t.total;
+                }
+                if (t.jenis === 'pengeluaran_stok' && t.metode === 'Hutang Supplier' && t.pelanggan && t.pelanggan !== '-') {
+                    petaHutang[t.pelanggan] = (petaHutang[t.pelanggan] || 0) + t.total;
+                }
+            });
+
+            let bayarBonMap = {}, bayarHutangMap = {};
+            window.dataPembayaranBon.forEach(p => { bayarBonMap[p.pelanggan] = (bayarBonMap[p.pelanggan] || 0) + p.nominal; });
+            window.dataPembayaranHutang.forEach(p => { bayarHutangMap[p.supplier] = (bayarHutangMap[p.supplier] || 0) + p.nominal; });
+
+            const queryBon = (document.getElementById('cariPelangganBon')?.value || '').toLowerCase();
+            const tabelBon = document.getElementById('tabelBon');
+            tabelBon.innerHTML = '';
+            let totBonGlobal = 0;
+
+            Object.keys(petaBon).forEach(nama => {
+                const total = petaBon[nama], bayar = bayarBonMap[nama] || 0, sisa = total - bayar;
+                if (sisa > 0) totBonGlobal += sisa;
+                if (queryBon && !nama.toLowerCase().includes(queryBon)) return;
+                if (total > 0) {
+                    tabelBon.innerHTML += `<tr><td><b>${nama}</b></td><td>Rp ${total.toLocaleString('id-ID')}</td><td>Rp ${bayar.toLocaleString('id-ID')}</td><td><b>Rp ${sisa.toLocaleString('id-ID')}</b></td><td><span class="${sisa <= 0 ? 'badge-status-lunas' : 'badge-status-bon'}">${sisa <= 0 ? 'LUNAS' : 'Belum Lunas'}</span></td><td>${sisa > 0 ? `<button class="btn-bayar" onclick="bayarBonFleksibel('${nama.replace(/'/g, "\\'")}', ${sisa})">Bayar</button>` : 'Lunas'}</td></tr>`;
+                }
+            });
+            document.getElementById('totalBonBelumLunas').innerText = `Rp ${totBonGlobal.toLocaleString('id-ID')}`;
+
+            const queryHutang = (document.getElementById('cariSupplierHutang')?.value || '').toLowerCase();
+            const tabelHutang = document.getElementById('tabelHutang');
+            tabelHutang.innerHTML = '';
+            let totHutangGlobal = 0;
+
+            Object.keys(petaHutang).forEach(nama => {
+                const total = petaHutang[nama], bayar = bayarHutangMap[nama] || 0, sisa = total - bayar;
+                if (sisa > 0) totHutangGlobal += sisa;
+                if (queryHutang && !nama.toLowerCase().includes(queryHutang)) return;
+                if (total > 0) {
+                    tabelHutang.innerHTML += `<tr><td><b>${nama}</b></td><td>Rp ${total.toLocaleString('id-ID')}</td><td>Rp ${bayar.toLocaleString('id-ID')}</td><td><b>Rp ${sisa.toLocaleString('id-ID')}</b></td><td><span class="${sisa <= 0 ? 'badge-status-lunas' : 'badge-status-bon'}">${sisa <= 0 ? 'LUNAS' : 'Belum Lunas'}</span></td><td>${sisa > 0 ? `<button class="btn-bayar-supplier" onclick="bayarHutangSupplierFleksibel('${nama.replace(/'/g, "\\'")}', ${sisa})">Bayar</button>` : 'Lunas'}</td></tr>`;
+                }
+            });
+            document.getElementById('totalHutangBelumLunas').innerText = `Rp ${totHutangGlobal.toLocaleString('id-ID')}`;
+
+            const labelPeriode = getLabelPeriode();
+            document.querySelectorAll('.txt-periode').forEach(el => el.innerText = labelPeriode);
+
+            const transaksiFiltered = getFilteredTransaksi();
+            renderGrafik(transaksiFiltered);
+
+            const tabelRiwayat = document.getElementById('tabelRiwayat');
+            tabelRiwayat.innerHTML = '';
+            let kasMasuk = 0, kasKeluar = 0, netLaba = 0;
+
+            transaksiFiltered.slice().reverse().forEach(t => {
+                let badge = 'badge-cash';
+                if (t.metode.includes('Transfer')) badge = 'badge-transfer';
+                if (t.metode === 'Bon') badge = 'badge-bon';
+                if (t.metode === 'Hutang Supplier') badge = 'badge-hutang';
+
+                let labaTxt = typeof t.labaBersih === 'number' ? (t.labaBersih < 0 ? `<span class="text-danger">-Rp ${Math.abs(t.labaBersih).toLocaleString('id-ID')}</span>` : `<span class="text-success">+Rp ${t.labaBersih.toLocaleString('id-ID')}</span>`) : '-';
+
+                tabelRiwayat.innerHTML += `<tr><td>${t.tgl} ${t.waktu || ''}</td><td><b>${t.tipe}</b></td><td>${t.detail}</td><td><span class="badge-method ${badge}">${t.metode}</span></td><td>${t.qty}</td><td>${typeof t.hargaSatuan === 'number' ? 'Rp ' + t.hargaSatuan.toLocaleString('id-ID') : '-'}</td><td>Rp ${t.total.toLocaleString('id-ID')}</td><td>${labaTxt}</td><td><button class="btn-delete" onclick="hapusTransaksi('${t.id}')">Hapus</button></td></tr>`;
+
+                if (t.jenis === 'pendapatan' && t.metode !== 'Bon') kasMasuk += t.total;
+                else if (t.jenis === 'pengeluaran_ops' || (t.jenis === 'pengeluaran_stok' && t.metode !== 'Hutang Supplier')) kasKeluar += t.total;
+                if (typeof t.labaBersih === 'number') netLaba += t.labaBersih;
+            });
+
+            document.getElementById('totalPendapatan').innerText = `Rp ${kasMasuk.toLocaleString('id-ID')}`;
+            document.getElementById('totalPengeluaran').innerText = `Rp ${kasKeluar.toLocaleString('id-ID')}`;
+            const boxLaba = document.getElementById('boxStatusLaba');
+            const totalLabaEl = document.getElementById('totalLaba');
+            if (netLaba < 0) {
+                boxLaba.className = 'summary-item loss';
+                totalLabaEl.innerHTML = `<span class="text-danger">-Rp ${Math.abs(netLaba).toLocaleString('id-ID')}</span>`;
+            } else {
+                boxLaba.className = 'summary-item profit';
+                totalLabaEl.innerHTML = `<span class="text-success">Rp ${netLaba.toLocaleString('id-ID')}</span>`;
+            }
+        };
+
+        window.eksporExcel = function() {
+            const transaksiFiltered = getFilteredTransaksi();
+            if (transaksiFiltered.length === 0) return alert('Tidak ada data.');
+            let excelData = [["LAPORAN KEUANGAN CV. FAMILY EGG"], [""], ["Tanggal", "Waktu", "Tipe", "Detail", "Metode", "Qty", "Harga Satuan", "Total", "Laba/Rugi"]];
+            transaksiFiltered.forEach(t => excelData.push([t.tgl, t.waktu, t.tipe, t.detail, t.metode, t.qty, t.hargaSatuan, t.total, t.labaBersih]));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(excelData), "Laporan");
+            XLSX.writeFile(wb, "Laporan_CV_Family_Egg.xlsx");
+        };
+
+        window.eksporPDF = function() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+            const transaksiFiltered = getFilteredTransaksi();
+            if (transaksiFiltered.length === 0) return alert('Tidak ada data.');
+            doc.text("LAPORAN KEUANGAN - CV. FAMILY EGG", 14, 15);
+            let rows = transaksiFiltered.map(t => [t.tgl, t.tipe, t.detail, t.metode, t.qty, t.hargaSatuan, t.total, t.labaBersih]);
+            doc.autoTable({ head: [['Tanggal', 'Tipe', 'Detail', 'Metode', 'Qty', 'Harga', 'Total', 'Laba']], body: rows, startY: 20 });
+            doc.save("Laporan_CV_Family_Egg.pdf");
+        };
+    </script>
+</body>
+</html>
